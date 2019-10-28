@@ -7,14 +7,20 @@
 WiFiMulti wifiMulti;
 const char* ssid     = SECRET_SSID;
 const char* password = SECRET_PASS;
+const char* api_key  = SECRET_APIK;
+const char* language = "ja";
+const char* region   = "JP";
+
 uint8_t buff_pic[30000];
 uint16_t buff_len = 0;
 
 unsigned long previousMillis = 0;
 const long interval = 5000;
 
-unsigned char ZoomMode = 15;
-String MapType = "roadmap";
+String defaultLatitude        = "35.0364041";
+String defaultLongitude       = "135.7613615";
+unsigned char defaultZoomMode = 15;
+String defaultMapType         = "roadmap";
 
 
 void setup()
@@ -37,34 +43,25 @@ void setup()
   delay(1000);
   WiFi.mode(WIFI_STA);
   wifiMulti.addAP(ssid, password);
-  lcd_println("Connect AP");
-  lcd_println("");
-  lcd_println("");
-  lcd_println("");
-  while (wifiMulti.run() != WL_CONNECTED)
-  {
+  lcd_serial_println("Connect AP");
+  lcd_serial_println("");
+  while (wifiMulti.run() != WL_CONNECTED) {
     delay(500);
-    Serial.print(".");
-    lcd_print(".");
+    lcd_serial_print(".");
   }
-  Serial.println("");
-  Serial.println("");
-  Serial.println("WiFi connected");
-  lcd_println("");
-  lcd_println("WiFi connected");
-  Serial.println("IP address: ");
-  lcd_print("IP address: ");
-  Serial.println(WiFi.localIP());
-  lcd_println(WiFi.localIP().toString());
+  lcd_serial_println("");
+  lcd_serial_println("WiFi connected");
+  lcd_serial_print("IP address: ");
+  lcd_serial_println(WiFi.localIP().toString());
   delay(5000);
-  lcd_println("Connect Server");
+  lcd_serial_println("Connect Server");
 
 }
 
 void loop()
 {
-  Get_GoogleMAP("13.840888", "100.542095", 15, "roadmap");
-  delay(1000);
+  Get_GoogleMAP(defaultLatitude, defaultLongitude, defaultZoomMode, defaultMapType);
+  delay(interval);
 }
 String GennerateGet(String latitude, String longitude, unsigned char zoom, String maptype)
 {
@@ -75,6 +72,9 @@ String GennerateGet(String latitude, String longitude, unsigned char zoom, Strin
   data += "&size=320x240";
   data += "&maptype=" + maptype;
   data += "&markers=color:red%7Clabel:S%7C" + latitude + "," + longitude;
+  data += "&language=" + String(language);
+  data += "&region=" + String(region);
+  data += "&key=" + String(api_key);
   return (data);
 }
 
@@ -101,8 +101,7 @@ void Get_GoogleMAP(String latitude, String longitude, unsigned char ZoomMode, St
 
           if (size) {
             int c = stream->readBytes(buff, ((size > sizeof(buff)) ? sizeof(buff) : size));
-            for (int i = 0; i < c; i++)
-            {
+            for (int i = 0; i < c; i++) {
               buff_pic[buff_len] = buff[i];
               buff_len++;
             }
@@ -113,9 +112,8 @@ void Get_GoogleMAP(String latitude, String longitude, unsigned char ZoomMode, St
           delay(1);
         }
         M5.Lcd.drawJpg(buff_pic, buff_len);
-        USE_SERIAL.println();
         USE_SERIAL.print("[HTTP] connection closed or file end.\n");
-
+        USE_SERIAL.println();
       }
     } else {
       USE_SERIAL.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
@@ -137,13 +135,15 @@ void header(const char *string, uint16_t color)
   M5.Lcd.setTextDatum(TC_DATUM);
   M5.Lcd.drawString(string, 160, 2, 4); // Font 4 for fast drawing with background
 }
-void lcd_print(String str)
+void lcd_serial_print(String str)
 {
   M5.Lcd.print(" ");
   M5.Lcd.print(str);
+  USE_SERIAL.print(str);
 }
-void lcd_println(String str)
+void lcd_serial_println(String str)
 {
   M5.Lcd.print(" ");
   M5.Lcd.println(str);
+  USE_SERIAL.println(str);
 }
