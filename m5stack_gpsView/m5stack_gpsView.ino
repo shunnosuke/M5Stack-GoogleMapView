@@ -3,33 +3,41 @@
 #include <WiFi.h>
 #include <WiFiMulti.h>
 #include <HTTPClient.h>
+#include <TinyGPS++.h>
+// #include <SoftwareSerial.h>
 #include "arduino_secrets.h"
+
+static const char* ssid     = SECRET_SSID;
+static const char* password = SECRET_PASS;
+static const char* api_key  = SECRET_APIK;
+static const char* language = "ja";
+static const char* region   = "JP";
 WiFiMulti wifiMulti;
-const char* ssid     = SECRET_SSID;
-const char* password = SECRET_PASS;
-const char* api_key  = SECRET_APIK;
-const char* language = "ja";
-const char* region   = "JP";
+
+static const uint32_t GPSBaud = 9600;
+static const int GPS_TX       = 0;
+static const int GPS_RX       = 15;
+static const int GPS_PPS      = 34;
+TinyGPSPlus gps; // The TinyGPS++ object
+HardwareSerial ss(2); // The defualt is 2
+// SoftwareSerial ss; // EspSoftwareSerial
 
 uint8_t buff_pic[30000];
 uint16_t buff_len = 0;
-
-unsigned long previousMillis = 0;
 const long interval = 5000;
 
-String defaultLatitude        = "35.0364041";
-String defaultLongitude       = "135.7613615";
-unsigned char defaultZoomMode = 15;
-String defaultMapType         = "roadmap";
+String defaultLatitude    = "35.0364041";
+String defaultLongitude   = "135.7613615";
+unsigned char defaultZoom = 15;
+String defaultMapType     = "roadmap";
 
 
 void setup()
 {
   //USE_SERIAL.begin(115200);
   USE_SERIAL.println();
-  USE_SERIAL.println();
-  USE_SERIAL.println();
   M5.begin();
+  ss.begin(GPSBaud, SERIAL_8N1, GPS_TX, GPS_RX);
   for (uint8_t t = 4; t > 0; t--) {
     USE_SERIAL.printf("[SETUP] WAIT %d...\n", t);
     USE_SERIAL.flush();
@@ -37,19 +45,22 @@ void setup()
   }
   M5.Lcd.setBrightness(255);
   M5.update();
-  header("Initial System", TFT_NAVY );
+  header("Initializing System", TFT_NAVY );
   M5.Lcd.setFreeFont(&FreeSansBold9pt7b);
+  lcd_serial_println("");
+  lcd_serial_println("");
+  lcd_serial_println("");
+  lcd_serial_print("TinyGPS++ library v. ");
+  lcd_serial_println(TinyGPSPlus::libraryVersion());
   WiFi.disconnect(true);
   delay(1000);
   WiFi.mode(WIFI_STA);
   wifiMulti.addAP(ssid, password);
   lcd_serial_println("Connect AP");
-  lcd_serial_println("");
   while (wifiMulti.run() != WL_CONNECTED) {
     delay(500);
     lcd_serial_print(".");
   }
-  lcd_serial_println("");
   lcd_serial_println("WiFi connected");
   lcd_serial_print("IP address: ");
   lcd_serial_println(WiFi.localIP().toString());
@@ -60,8 +71,11 @@ void setup()
 
 void loop()
 {
-  Get_GoogleMAP(defaultLatitude, defaultLongitude, defaultZoomMode, defaultMapType);
-  delay(interval);
+  String latitude = String(gps.location.lat(), 7);
+  String longitude = String(gps.location.lng(), 7);
+  USE_SERIAL.println("[GPS] " + latitude + ", " + longitude);
+  Get_GoogleMAP(latitude, longitude, defaultZoom, defaultMapType);
+  smartDelay(interval);
 }
 String GennerateGet(String latitude, String longitude, unsigned char zoom, String maptype)
 {
@@ -77,7 +91,6 @@ String GennerateGet(String latitude, String longitude, unsigned char zoom, Strin
   data += "&key=" + String(api_key);
   return (data);
 }
-
 void Get_GoogleMAP(String latitude, String longitude, unsigned char ZoomMode, String MapType)
 {
 
@@ -94,7 +107,7 @@ void Get_GoogleMAP(String latitude, String longitude, unsigned char ZoomMode, St
       if (httpCode == HTTP_CODE_OK) {
         int len = http.getSize();
         uint8_t buff[128] = { 0 };
-        WiFiClient * stream = http.getStreamPtr();
+        WiFiClient* stream = http.getStreamPtr();
         buff_len = 0;
         while (http.connected() && (len > 0 || len == -1)) {
           size_t size = stream->available();
@@ -122,7 +135,17 @@ void Get_GoogleMAP(String latitude, String longitude, unsigned char ZoomMode, St
     http.end();
   }
 }
-
+static void smartDelay(unsigned long ms)
+{
+  USE_SERIAL.print("[SERIAL] {");
+  unsigned long start = millis();
+  do {
+    while (ss.available())
+      // USE_SERIAL.print(ss.read());
+      gps.encode(ss.read());
+  } while (millis() - start < ms);
+  USE_SERIAL.println("}");
+}
 
 
 
